@@ -1,0 +1,56 @@
+model {
+	diffcoef[1] = -0.5
+	diffcoef[2] =  0.5
+
+	alphagroupmu ~ dgamma(2,2)
+	betagroupmu ~ dbeta(2,2)
+	taugroupmu ~ dnorm(0.5, 1/0.2^2)T(0.001, 2.99)
+
+	####### Group level params
+	for (c in 1:5) {
+		deltagroupmid[c] ~ dnorm(0, 1/1.5^2)
+		deltagroupdiff[c] ~ dnorm(0, 1/1^2)
+
+		for (raceCond in 1:2) {
+			deltagroupmu[c,raceCond] = deltagroupmid[c] + diffcoef[raceCond]*deltagroupdiff[c]
+		}
+		
+	}
+
+	####### Subj level params
+	alphagroupsd ~ dexp(.5)
+	betagroupsd ~ dexp(.5)
+	taugroupsd ~ dexp(.5)
+	for (c in 1:5) {
+		for (raceCond in 1:2) {
+			deltagroupsd[c,raceCond] ~ dexp(.5)
+		}
+	}
+	
+	for (s in 1:nAllSubj) {
+		alphasubj[s] ~ dnorm(alphagroupmu, 1/alphagroupsd^2)
+		betasubj[s] ~ dnorm(betagroupmu, 1/betagroupsd^2)	
+		tausubj[s] ~ dnorm(taugroupmu, 1/taugroupsd^2)
+		for (c in 1:5) {
+			for (raceCond in 1:2) {
+				deltasubj[s,c,raceCond,1] ~ dnorm(deltagroupmu[c,raceCond],1/deltagroupsd[c,raceCond]^2)
+				deltasubj[s,c,raceCond,2] = 0
+			}
+		}
+	}
+
+	####### Update loop
+	for (s in 1:nAllSubj) {
+		for (r in 1:nRuns) {
+			for (b in 1:nBlocks) {
+				for (tr in 1:nTrials) {
+         			y[s,r,b,tr] ~ dwiener(alphasubj[s], tausubj[s], betasubj[s], deltasubj[s,condList[s,r,b,tr],condRaceList[s,r,b,tr],z[s,r,b,tr]+1])
+         			ypred[s,r,b,tr] ~ dwiener(alphasubj[s], tausubj[s], betasubj[s], deltasubj[s,condList[s,r,b,tr],condRaceList[s,r,b,tr],z[s,r,b,tr]+1])
+
+         			z[s,r,b,tr] ~ dbern(phi[s]) # guessing or not
+				}
+			}
+		}
+		phi[s] ~ dunif(0,1)
+	}
+}
