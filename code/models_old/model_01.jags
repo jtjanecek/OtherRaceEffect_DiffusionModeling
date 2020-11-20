@@ -1,0 +1,40 @@
+model {
+	diffcoef[1] = -0.5
+	diffcoef[2] =  0.5
+
+	alpha ~ dgamma(2,2)
+	beta  ~ dbeta(2,2)
+	tau   ~ dnorm(0.5, 1/0.2^2)T(0.001, 2.99)
+	tausd ~ dexp(2)
+
+
+	for (c in 1:3) {
+		deltacondmid[c] ~ dnorm(0, 1/1.5^2)
+		deltaconddiff[c] ~ dnorm(0, 1/0.8^2)
+
+		for (raceCond in 1:2) {
+			delta[c,raceCond,1] = deltacondmid[c] + diffcoef[raceCond]*deltaconddiff[c]
+			delta[c,raceCond,2] = 0	
+		}
+	}
+
+
+	# Subject level parameters
+	for (s in 1:nAllSubj) {
+		tausubj[s] ~ dnorm(tau, 1/tausd^2)T(0.001,2.99)
+	}
+
+	for (s in 1:nAllSubj) {
+		for (r in 1:nRuns) {
+			for (b in 1:nBlocks) {
+				for (tr in 1:nTrials) {
+         			y[s,r,b,tr] ~ dwiener(alpha, tausubj[s], beta, delta[condList[s,r,b,tr],condRaceList[s,r,b,tr],z[s,r,b,tr]+1])
+					ypred[s,r,b,tr] ~ dwiener(alpha, tausubj[s], beta, delta[condList[s,r,b,tr],condRaceList[s,r,b,tr],z[s,r,b,tr]+1])
+
+         			z[s,r,b,tr] ~ dbern(phi[s]) # guessing or not
+				}
+			}
+		}
+		phi[s] ~ dunif(0,1)
+	}
+}

@@ -1,0 +1,110 @@
+ model {
+      diffcoef[1] = 1
+      diffcoef[2] = 0
+
+      # Group 1 = Old
+      # Group 2 = Young
+      # Pos = New
+      # Neg = Old
+      # Priors - basic variables in wiener
+      # Difference prior is positive when old > young
+      # difference prior is negative when old < young
+
+	  #alpha ~ dgamma(2,2)
+      alpha ~ dnorm(.05,1/1.25^2)T(0.01,)
+      alphadiff ~ dnorm(0, pow(.125,-2))
+      #beta ~ dbeta(2,2)
+      beta ~ dnorm(.5, 1/.2^2)T(0.01, .99)
+      betadiff ~ dnorm(0, pow(.125,-2))      
+      #tau ~ dexp(.5)T(0, 1.99)
+      tau ~ dnorm(.5, 1/.2^2)T(0.01, 1.99)
+      taudiff ~ dnorm(0, pow(.1,-2))
+
+      # Target
+      deltamid[1]  ~ dnorm(0, pow(2.5,-2))
+      deltadiff[1] ~ dnorm(0, pow(1.5,-2))
+
+      # HSim
+      deltamid[2]  ~ dnorm(0, pow(2.5,-2))
+      deltadiff[2] ~ dnorm(0, pow(1.5,-2))
+
+      # LSim
+      deltamid[3]  ~ dnorm(0, pow(2.5,-2))
+      deltadiff[3] ~ dnorm(0, pow(1.5,-2))
+
+      # Foil      
+      deltamid[4]  ~ dnorm(0, pow(2.5,-2))
+      deltadiff[4] ~ dnorm(0, pow(1.5,-2))
+
+       ######### Trial Level
+
+      for (s in 1:nSubjects) {
+          tausubj[s] ~ dnorm(taugroup[groupList[s]], 1/taugroupsd[groupList[s]]^2)T(0.01,1.99)
+          betasubj[s] ~ dnorm(betagroup[groupList[s]], 1/betagroupsd[groupList[s]]^2)T(0.01,0.99)
+          alphasubj[s] ~ dnorm(alphagroup[groupList[s]], 1/alphagroupsd[groupList[s]]^2)
+
+		  # Subj SDs
+		  tausubjsd[s] ~ dunif(.01, 1)
+		  betasubjsd[s] ~ dunif(.01, 1)
+		  deltasubjsd[s] ~ dunif(.01, 5)
+
+          for (tr in 1:nAllTrials) {
+               tausubjtrial[s,tr] ~ dnorm(tausubj[s], 1/tausubjsd[s]^2)T(0.01, 1.99)
+               betasubjtrial[s,tr] ~ dnorm(betasubj[s], 1/betasubjsd[s]^2)T(0.01, .99)
+			   deltasubjtrial[s,tr,1] ~ dnorm(deltasubj[s,subList[s,tr]], 1/deltasubjsd[s]^2)
+			   deltasubjtrial[s,tr,2] = 0
+          }
+          
+          for (c in 1:nConditions) {
+              deltasubj[s,c] ~ dnorm(delta[groupList[s], c], 1/deltagroupcondsd[groupList[s]]^2)
+          }
+        }
+
+      ######### Group Level
+      for (g in 1:2) {
+		# Group SDs
+		deltagroupcondsd[g] ~ dunif(.01,5)
+		taugroupsd[g] ~ dunif(.01, .2)
+		betagroupsd[g] ~ dunif(.01, 1)
+		alphagroupsd[g] ~ dunif(.01, 3)
+
+        alphagroup[g] = alpha + diffcoef[g] * alphadiff
+        betagroup[g]  = beta  + diffcoef[g] * betadiff
+        taugroup[g]   = tau   + diffcoef[g] * taudiff
+
+        # guessing or not (condition 2 is guessing, so drift is unbiased)
+        for (c in 1:nConditions) {
+           delta[g,c] = deltamid[c] + diffcoef[g] * deltadiff[c]
+        }
+      }
+
+     ############### Run diffusion model
+   for (s in 1:nSubjects) {
+      # trials in order, not separated by condition
+      for (tr in 1:nAllTrials) {
+         # using answer from that trial, adjust weiner variables
+         y[s,tr] ~ dwiener(alphasubj[s], tausubjtrial[s, tr], betasubjtrial[s,tr],deltasubjtrial[s,tr,z[s,tr]+1])
+         # ypred is prediction of whether trial will be correct based on weiner model
+         ypred[s,tr] ~ dwiener(alphasubj[s], tausubjtrial[s, tr], betasubjtrial[s,tr],deltasubjtrial[s,tr,z[s,tr]+1])
+
+         z[s,tr] ~ dbern(phi[s]) # guessing or not
+      }
+      phi[s] ~ dunif(0,1) # random proportion fed into guessing variable, updated based on their trial responses, fed into z
+   }
+
+	tausubjrep[1] ~ dnorm(taugroup[1], 1/taugroupsd[1]^2)
+	tausubjrep[2] ~ dnorm(taugroup[2], 1/taugroupsd[2]^2)
+	alphasubjrep[1] ~ dnorm(alphagroup[1], 1/alphagroupsd[1]^2)
+	alphasubjrep[2] ~ dnorm(alphagroup[2], 1/alphagroupsd[2]^2)
+	betasubjrep[1] ~ dnorm(betagroup[1], 1/betagroupsd[1]^2)
+	betasubjrep[2] ~ dnorm(betagroup[2], 1/betagroupsd[2]^2)
+	deltasubjrep[1,1] ~ dnorm(delta[1,1], 1/deltagroupcondsd[1]^2)
+	deltasubjrep[1,2] ~ dnorm(delta[1,2], 1/deltagroupcondsd[1]^2)
+	deltasubjrep[1,3] ~ dnorm(delta[1,3], 1/deltagroupcondsd[1]^2)
+	deltasubjrep[1,4] ~ dnorm(delta[1,4], 1/deltagroupcondsd[1]^2)
+	deltasubjrep[2,1] ~ dnorm(delta[2,1], 1/deltagroupcondsd[2]^2)
+	deltasubjrep[2,2] ~ dnorm(delta[2,2], 1/deltagroupcondsd[2]^2)
+	deltasubjrep[2,3] ~ dnorm(delta[2,3], 1/deltagroupcondsd[2]^2)
+	deltasubjrep[2,4] ~ dnorm(delta[2,4], 1/deltagroupcondsd[2]^2)
+
+}

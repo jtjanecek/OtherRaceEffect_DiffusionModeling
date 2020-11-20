@@ -1,0 +1,110 @@
+model {
+	diffcoef[1] = -0.5
+	diffcoef[2] =  0.5
+
+	alphagroupmu ~ dgamma(2,2)T(0.001,)
+	betagroupmu ~ dbeta(2,2)T(0.001,0.999)
+	taugroupmu ~ dnorm(0.5, 1/0.2^2)T(0.001, 2.999)
+
+	####### Group level params
+	for (c in 1:5) {
+		deltagroupmid[c] ~ dnorm(0, 1/1.5^2)
+		deltagroupdiff[c] ~ dnorm(0, 1/1^2)
+
+		for (raceCond in 1:2) {
+			deltagroupmu[c,raceCond] = deltagroupmid[c] + diffcoef[raceCond]*deltagroupdiff[c]
+		}
+		
+	}
+
+	####### Subj level params
+	alphagroupsd ~ dexp(.5)
+	betagroupsd ~ dexp(.5)
+	taugroupsd ~ dexp(.5)
+	for (c in 1:5) {
+		for (raceCond in 1:2) {
+			deltagroupsd[c,raceCond] ~ dexp(2)
+		}
+	}
+	
+	for (s in 1:nAllSubj) {
+		alphasubj[s] ~ dnorm(alphagroupmu, 1/alphagroupsd^2)T(0.001,)
+		betasubj[s] ~ dnorm(betagroupmu, 1/betagroupsd^2)T(0.001,0.999)
+		tausubj[s] ~ dnorm(taugroupmu, 1/taugroupsd^2)T(0.001, 2.999)
+		for (c in 1:5) {
+			for (raceCond in 1:2) {
+				deltasubj[s,c,raceCond] ~ dnorm(deltagroupmu[c,raceCond],1/deltagroupsd[c,raceCond]^2)
+			}
+		}
+	}
+
+	####### Run level params
+	for (s in 1:nAllSubj) {
+		betasubjsd[s] ~ dexp(.5)
+		tausubjsd[s] ~ dexp(.5)
+		for (c in 1:5) {
+			for (raceCond in 1:2) {
+				deltasubjsd[s,c,raceCond] ~ dexp(2)
+			}
+		}
+	}
+
+	for (s in 1:nAllSubj) {
+		for (r in 1:nRuns) {
+			betasubjrun[s,r] ~ dnorm(betasubj[s], 1/betasubjsd[s]^2)T(0.001,0.999)
+			tausubjrun[s,r] ~ dnorm(tausubj[s], 1/tausubjsd[s]^2)T(0.001, 2.999)
+			for (c in 1:5) {
+				for (raceCond in 1:2) {
+					deltasubjrun[s,r,c,raceCond] ~ dnorm(deltasubj[s,c,raceCond], 1/deltasubjsd[s,c,raceCond]^2)
+				}
+			}
+		}	
+	}
+
+	###### Block level params
+	for (s in 1:nAllSubj) {
+		for (r in 1:nRuns) {
+			betasubjrunsd[s,r] ~ dexp(.5)
+			tausubjrunsd[s,r] ~ dexp(.5)
+			for (c in 1:5) {
+				for (raceCond in 1:2) {
+					deltasubjrunsd[s,r,c,raceCond] ~ dexp(2)
+				}
+			}
+		}
+	}
+
+	for (s in 1:nAllSubj) {
+		for (r in 1:nRuns) {
+			for (b in 1:nBlocks) {
+				betasubjrunblock[s,r,b] ~ dnorm(betasubjrun[s,r], 1/betasubjrunsd[s,r]^2)T(0.001,0.999)
+				tausubjrunblock[s,r,b] ~ dnorm(tausubjrun[s,r], 1/tausubjrunsd[s,r]^2)T(0.001, 2.999)
+				for (c in 1:5) {
+					for (raceCond in 1:2) {
+						deltasubjrunblock[s,r,b,c,raceCond,1] ~ dnorm(deltasubjrun[s,r,c,raceCond], 1/deltasubjrunsd[s,r,c,raceCond]^2)
+						deltasubjrunblock[s,r,b,c,raceCond,2] = 0
+					}
+				}
+			}
+		}	
+	}
+
+
+
+
+
+	####### Update loop
+	for (s in 1:nAllSubj) {
+		for (r in 1:nRuns) {
+			for (b in 1:nBlocks) {
+				for (tr in 1:nTrials) {
+         			y[s,r,b,tr] ~ dwiener(alphasubj[s], tausubjrunblock[s,r,b], betasubjrunblock[s,r,b], deltasubjrunblock[s,r,b,condList[s,r,b,tr],condRaceList[s,r,b,tr],z[s,r,b,tr]+1])
+         			ypred[s,r,b,tr] ~ dwiener(alphasubj[s], tausubjrunblock[s,r,b], betasubjrunblock[s,r,b], deltasubjrunblock[s,r,b,condList[s,r,b,tr],condRaceList[s,r,b,tr],z[s,r,b,tr]+1])
+
+         			z[s,r,b,tr] ~ dbern(phi[s]) # guessing or not
+				}
+			}
+		}
+		phi[s] ~ dunif(0,1)
+	}
+}

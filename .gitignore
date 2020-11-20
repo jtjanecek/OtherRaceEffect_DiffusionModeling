@@ -1,0 +1,6 @@
+*.csv
+trinity-master/
+data/
+results/
+storage/
+CodaFormatter/
